@@ -1,5 +1,9 @@
 # pragmatic
 
+![pragmatic: Claude draws a flowchart, then mind maps, task stacks, wireframes, live docs and the time machine](docs/media/pragmatic-demo.gif)
+
+30-second tour, recorded from the running app ([MP4](docs/media/pragmatic-demo.mp4)).
+
 A diagram workspace, modelled on Whimsical: boards, flowcharts, mind maps, wireframes, task cards and docs.
 Boards run on pragmatic's own canvas engine with live multi-user editing.
 Run it for yourself (no sign-in), or on your network for a team (OpenID Connect, passwords or Google sign-in).
