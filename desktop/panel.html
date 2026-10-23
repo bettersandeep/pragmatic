@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<title>Claude</title>
+<link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #17161c; color: #d9d7e3; overflow: hidden;
+    font: 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; border-left: 1px solid #2c2a35; box-sizing: border-box; }
+  header { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 14px; flex: none;
+    border-bottom: 1px solid #2c2a35; user-select: none; }
+  header strong { font-weight: 600; color: #f2f1f7; }
+  #cwd { color: #8d8a99; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  button { font: inherit; color: #d9d7e3; background: #26242f; border: 1px solid #3a3745; border-radius: 6px;
+    padding: 3px 9px; cursor: pointer; }
+  button:hover { background: #302d3b; }
+  #term { flex: 1; min-height: 0; padding: 8px 6px 6px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Claude Code</strong>
+  <span id="cwd"></span>
+  <button id="folder" title="Run Claude in another folder">Folder…</button>
+</header>
+<div id="term"></div>
+<script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

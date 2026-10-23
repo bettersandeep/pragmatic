@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+<title>Settings</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 20px 22px; font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  h1 { font-size: 13px; margin: 0 0 8px; }
+  label { display: flex; gap: 8px; align-items: baseline; font-weight: 600; margin-top: 10px; }
+  label input { width: auto; margin: 0; }
+  .sub { margin: 4px 0 0 21px; }
+  #url { margin-top: 6px; }
+  #url:disabled { opacity: .45; }
+  .gap { margin-top: 18px; }
+  a { color: #6a5cf0; cursor: pointer; }
+  input { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid #b9b7c3; }
+  p { margin: 6px 0 0; color: #77757f; }
+  #error { color: #d33c3c; min-height: 1.3em; }
+  .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  button { font: inherit; padding: 5px 14px; border-radius: 6px; border: 1px solid #b9b7c3; background: transparent;
+    color: inherit; cursor: pointer; }
+  button[type=submit] { background: #6a5cf0; border-color: #6a5cf0; color: #fff; }
+</style>
+</head>
+<body>
+<form id="form">
+  <h1>pragmatic server</h1>
+  <label><input type="radio" name="server" value="builtin"> Built-in (this computer)</label>
+  <div class="sub">
+    <p>For you alone, no sign-in. Your boards stay in <a id="data">the app's data folder</a>.</p>
+    <p>For Google Drive backup, put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in pragmatic.env in that folder.</p>
+  </div>
+  <label><input type="radio" name="server" value="remote"> Another server</label>
+  <div class="sub">
+    <input id="url" list="presets" spellcheck="false" autocomplete="off">
+    <datalist id="presets"></datalist>
+    <p>A team server, for example http://pragmatic.lan:3100 (development: http://localhost:5173).</p>
+  </div>
+  <h1 class="gap">Claude</h1>
+  <label><input type="checkbox" id="claude"> Claude panel</label>
+  <div class="sub"><p>Claude Code next to the board (Cmd+Shift+K). It needs Claude Code on this computer. Turn it off to use pragmatic alone.</p></div>
+  <p id="error"></p>
+  <div class="row">
+    <button type="button" id="cancel">Cancel</button>
+    <button type="submit">Save</button>
+  </div>
+</form>
+<script src="settings.js"></script>
+</body>
+</html>

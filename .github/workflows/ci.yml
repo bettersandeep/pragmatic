@@ -1,0 +1,37 @@
+# Tests on every pull request and on main: once on PGlite (the built-in database), once on a real Postgres.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # Each test file on an empty database.
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env: { POSTGRES_PASSWORD: ci }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: |
+          for f in server/*.test.ts; do
+            db="t_$(basename "$f" .test.ts)"
+            node --input-type=module -e "const { default: pg } = await import('pg'); const c = new pg.Client('postgres://postgres:ci@localhost/postgres'); await c.connect(); await c.query('CREATE DATABASE $db'); await c.end();"
+            DATABASE_URL="postgres://postgres:ci@localhost/$db" node --test "$f"
+          done

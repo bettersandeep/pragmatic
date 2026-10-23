@@ -1,0 +1,27 @@
+{
+  "manifest_version": "0.3",
+  "name": "pragmatic",
+  "display_name": "pragmatic",
+  "version": "0.1.0",
+  "description": "Draw and edit pragmatic boards and docs from Claude Desktop.",
+  "long_description": "Connects Claude Desktop to your pragmatic server. Claude can draw boards from prompts, rebuild screenshots as editable diagrams, write docs and manage tasks. On first use a browser page asks you to sign in to pragmatic and allow access.",
+  "author": { "name": "pragmatic" },
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "node_modules/mcp-remote/dist/proxy.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/node_modules/mcp-remote/dist/proxy.js", "${user_config.server_url}", "--auth-timeout", "300", "--static-oauth-client-metadata", "{\"client_name\": \"Claude Desktop\"}"]
+    }
+  },
+  "user_config": {
+    "server_url": {
+      "type": "string",
+      "title": "pragmatic MCP address",
+      "description": "Copy it from Settings & Claude in pragmatic. It ends in /mcp, for example http://localhost:3100/mcp.",
+      "required": true
+    }
+  },
+  "compatibility": { "platforms": ["darwin", "win32", "linux"], "runtimes": { "node": ">=20.0.0" } }
+}

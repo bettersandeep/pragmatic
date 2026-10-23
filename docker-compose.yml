@@ -1,0 +1,46 @@
+# pragmatic with Docker Compose. Settings come from .env next to this file (copy .env.example).
+#
+# Personal use (no sign-in, this machine only):   docker compose up -d   then open http://localhost:3100
+# A team on a local network: in .env set AUTH=oidc or AUTH=password, BASE_URL=http://<this host>:3100 and
+# PRAGMATIC_BIND=0.0.0.0, then docker compose up -d. See the README for each sign-in mode.
+# With a separate Postgres:   docker compose --profile postgres up -d   and in .env
+#   DATABASE_URL=postgres://pragmatic:pragmatic@postgres:5432/pragmatic
+services:
+  pragmatic:
+    build: .
+    image: pragmatic:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # The address the port is published on; with AUTH=local the server refuses anything but 127.0.0.1.
+      PRAGMATIC_BIND: ${PRAGMATIC_BIND:-127.0.0.1}
+    ports:
+      - "${PRAGMATIC_BIND:-127.0.0.1}:${PRAGMATIC_PORT:-3100}:3100"
+    volumes:
+      - pragmatic-data:/data
+    shm_size: 256m # Chromium draws board pictures (Drive copies, Claude's export_board)
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false # only with --profile postgres
+
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:18
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pragmatic
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pragmatic}
+      POSTGRES_DB: pragmatic
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pragmatic"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  pragmatic-data:
+  postgres-data:

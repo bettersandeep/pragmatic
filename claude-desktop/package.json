@@ -1,0 +1,6 @@
+{
+  "name": "pragmatic-claude-desktop",
+  "private": true,
+  "description": "Claude Desktop extension: mcp-remote pointed at a pragmatic server (it does the OAuth sign-in).",
+  "dependencies": { "mcp-remote": "0.15.2" }
+}
