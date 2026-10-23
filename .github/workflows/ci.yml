@@ -31,7 +31,7 @@ jobs:
       - run: npm ci
       - run: |
           for f in server/*.test.ts; do
-            db="t_$(basename "$f" .test.ts)"
+            db="t_$(basename "$f" .test.ts | tr - _)" # hyphens are not valid in a bare database name
             node --input-type=module -e "const { default: pg } = await import('pg'); const c = new pg.Client('postgres://postgres:ci@localhost/postgres'); await c.connect(); await c.query('CREATE DATABASE $db'); await c.end();"
             DATABASE_URL="postgres://postgres:ci@localhost/$db" node --test "$f"
           done
