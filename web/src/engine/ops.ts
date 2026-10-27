@@ -2,8 +2,10 @@ import { frameScreen, isBox, type BoardObject, type BoxObject } from '../../../s
 export { cloneObjects, withInnerConnectors } from '../../../shared/clone.ts';
 import { bounds, type Rect } from '../../../shared/layout.ts';
 import { withInnerConnectors } from '../../../shared/clone.ts';
-import { toOutline } from '../../../shared/mindmapOps.ts';
-import { parseForest, type OutlineNode } from '../../../shared/mindmap.ts';
+import { branchTree, toOutline } from '../../../shared/mindmapOps.ts';
+import { buildTree } from '../../../shared/mindmapLayout.ts';
+import type { OutlineNode } from '../../../shared/mindmap.ts';
+import { escapeHtml } from '../../../shared/richtext.ts';
 import { tableData } from '../../../shared/tableOps.ts';
 import { connectorGeometry, type Pt } from '../../../shared/route.ts';
 
@@ -69,36 +71,38 @@ export function selectionBounds(ids: string[], byId: Map<string, BoardObject>): 
 // A copy carries the objects twice: readable text for other apps (an outline, a table's cells, the words), and the
 // objects themselves in the HTML part for pragmatic. Without the clipboard API (plain http) the objects go as text.
 const CLIP = 'pragmatic/objects:';
-export const serialize = (objs: BoardObject[]) => CLIP + JSON.stringify(objs);
+const serialize = (objs: BoardObject[]) => CLIP + JSON.stringify(objs);
 export const deserialize = (text: string): BoardObject[] | null => {
   if (!text.startsWith(CLIP)) return null;
   try { return JSON.parse(text.slice(CLIP.length)); } catch { return null; }
 };
-const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const listHtml = (outline: string) => {
-  const ul = (ns: OutlineNode[]): string => `<ul>${ns.map((n) => `<li>${esc(n.text)}${n.children.length ? ul(n.children) : ''}</li>`).join('')}</ul>`;
-  return ul(parseForest(outline));
+const ul = (ts: OutlineNode[]): string =>
+  ts.length ? `<ul>${ts.map((t) => `<li>${escapeHtml(t.text).replace(/\n/g, '<br>')}${ul(t.children)}</li>`).join('')}</ul>` : '';
+const htmlOf = (o: BoardObject) => {
+  if (o.type === 'mindmap') { const root = buildTree(o); return root ? ul([branchTree(o, root.id)!]) : ''; }
+  if (o.type === 'table') return `<table>${tableData(o).map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</table>`;
+  const t = plainText([o]);
+  return t ? `<p>${escapeHtml(t).replace(/\n/g, '<br>')}</p>` : '';
 };
-const htmlOf = (o: BoardObject) =>
-  o.type === 'mindmap' ? listHtml(toOutline(o))
-  : o.type === 'table' ? `<table>${tableData(o).map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`
-  : plainText([o]) ? `<p>${esc(plainText([o])).replace(/\n/g, '<br>')}</p>` : '';
-// The HTML part: what other apps paste (lists, tables, paragraphs) and, in an attribute, the objects for pragmatic.
-// A copied mind map branch carries only its outline, marked, so pasting it adds branches or makes a mind map.
-export const clipHtml = (objs: BoardObject[]) => `<span data-pragmatic="${encodeURIComponent(serialize(objs))}"></span>${objs.map(htmlOf).join('')}`;
-export const branchHtml = (outline: string) => `<span data-pragmatic-branch=""></span>${listHtml(outline)}`;
-export const isBranchClip = (html: string) => html.includes('data-pragmatic-branch');
+const attr = (name: string, value: unknown) => `<span data-${name}="${encodeURIComponent(typeof value === 'string' ? value : JSON.stringify(value))}"></span>`;
+const fromAttr = (html: string, name: string) => { const m = new RegExp(`data-${name}="([^"]*)"`).exec(html); return m ? decodeURIComponent(m[1]) : null; };
 
-// What a copy puts on the clipboard. A focused mind map node copies its branch as an outline.
+// What a copy puts on the clipboard. A focused mind map node (not the root, which copies the whole map with its
+// layout) copies its branch: an outline for other apps, and the tree itself (text and look) for pragmatic, so
+// pasting it adds that branch or makes a mind map of it.
 export function clipOf(selection: string[], objects: BoardObject[], sub: { id: string; node?: string } | null) {
-  const map = sub?.node ? objects.find((o) => o.id === sub.id) : undefined;
-  if (map?.type === 'mindmap') { const text = toOutline(map, false, sub!.node); return { text, html: branchHtml(text), fallback: text }; }
+  const map = sub?.node && selection.includes(sub.id) ? objects.find((o) => o.id === sub.id) : undefined;
+  if (map?.type === 'mindmap' && map[`n.${sub!.node}`]?.parent) {
+    const text = toOutline(map, false, sub!.node), tree = branchTree(map, sub!.node!);
+    return { text, html: tree ? attr('pragmatic-branch', tree) + ul([tree]) : '', fallback: text };
+  }
   const objs = withInnerConnectors(selection, objects);
-  return { text: plainText(objs), html: clipHtml(objs), fallback: serialize(objs) };
+  return { text: plainText(objs), html: attr('pragmatic', serialize(objs)) + objs.map(htmlOf).join(''), fallback: serialize(objs) };
 }
-export const fromClipHtml = (html: string) => {
-  const m = /data-pragmatic="([^"]*)"/.exec(html);
-  return m ? deserialize(decodeURIComponent(m[1])) : null;
+export const fromClipHtml = (html: string) => { const v = fromAttr(html, 'pragmatic'); return v ? deserialize(v) : null; };
+export const branchOf = (html: string): OutlineNode | null => {
+  const v = fromAttr(html, 'pragmatic-branch');
+  try { return v ? JSON.parse(v) : null; } catch { return null; }
 };
 export const plainText = (objs: BoardObject[]) => objs.map((o) =>
   o.type === 'mindmap' ? toOutline(o)
@@ -107,15 +111,15 @@ export const plainText = (objs: BoardObject[]) => objs.map((o) =>
   : o.type === 'link' ? o.url
   : 'text' in o && typeof o.text === 'string' ? o.text : '').filter((t) => t?.trim()).join('\n\n');
 
-// Cells copied from Sheets, Excel or Notion: their HTML table, else tab-separated lines. Leading tabs alone are an
-// indented list, not a table. Capped like a pasted sheet should be.
+// Cells copied from Sheets, Excel or Notion: their HTML table, else tab-separated lines. A row may start with an
+// empty cell, but lines with only leading tabs are an indented list, not a table. Capped like a pasted sheet should be.
 export function clipTable(html: string, text: string): string[][] | null {
   let rows: string[][] = [];
   const table = /<table/i.test(html) ? new DOMParser().parseFromString(html, 'text/html').querySelector('table') : null;
   if (table) rows = [...table.querySelectorAll('tr')].map((tr) => [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName)).map((c) => c.textContent!.replace(/\u00a0/g, ' ').trim()));
   else {
     const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
-    if (lines.every((l) => /[^\t]\t/.test(l))) rows = lines.map((l) => l.split('\t').map((c) => c.replace(/^"([\s\S]*)"$/, '$1').trim()));
+    if (lines.every((l) => l.includes('\t')) && lines.some((l) => /[^\t]\t/.test(l))) rows = lines.map((l) => l.split('\t').map((c) => c.replace(/^"([\s\S]*)"$/, '$1').trim()));
   }
   rows = rows.filter((r) => r.length).slice(0, 300).map((r) => r.slice(0, 40));
   const width = Math.max(0, ...rows.map((r) => r.length));

@@ -8,6 +8,8 @@ export const MARKS = ['bold', 'italic', 'underline', 'strike', 'link'] as const;
 export type Mark = (typeof MARKS)[number];
 export type ListKind = 'bullet_list' | 'ordered_list';
 
+export const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 // Only web and mail links; anything else (javascript:, data:) is not a link.
 export const safeHref = (href: unknown) => (typeof href === 'string' && /^(https?:\/\/|mailto:)/i.test(href.trim()) ? href.trim() : null);
 

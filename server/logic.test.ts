@@ -159,14 +159,82 @@ test('mind map ops: reorder, fold all, paste branches, branch outline', () => {
   assert.equal(mm.toOutline(o, false, id('B')), 'B\n  X\n    X1\n  Y');
 });
 
-test('outline forest: several roots, list markers, Markdown headings', () => {
-  const f = parseForest('# Plan\nIntro\n## Steps\n1. One\n2) Two\n   - [x] done\n# Later\n• Idea');
+test('outline forest: several roots, list markers, Markdown headings (paste and import only)', () => {
+  const f = parseForest('# Plan\nIntro\n## Steps\n1. One\n2) Two\n   - [x] done\n# Later\n• Idea', true);
   const show = (n: any, d = 0): string => `${'  '.repeat(d)}${n.text}\n${n.children.map((c: any) => show(c, d + 1)).join('')}`;
   assert.equal(f.map((n) => show(n)).join(''), 'Plan\n  Intro\n  Steps\n    One\n    Two\n      done\nLater\n  Idea\n');
-  assert.ok(looksLikeOutline('A\n  B'));
+  // Claude's outlines and the dialog keep the plain rules: only "- * +" bullets go, "#" and "1." are text.
+  assert.deepEqual(parseOutline('Metrics\n  # of users\n  1. Revenue\n  - Cost').children.map((c) => c.text), ['# of users', '1. Revenue', 'Cost']);
   assert.ok(looksLikeOutline('- A\n- B'));
-  assert.ok(!looksLikeOutline('One line'));
+  assert.ok(looksLikeOutline('# A\nB'));
+  assert.ok(looksLikeOutline('A\n\tB', '<ul><li>A<ul><li>B</li></ul></li></ul>')); // a notes app's list
+  assert.ok(!looksLikeOutline('A\n  B')); // indent alone: could be code
+  assert.ok(!looksLikeOutline('function f() {\n  return 1;\n}'));
+  assert.ok(!looksLikeOutline('{\n  "a": 1\n}'));
+  assert.ok(!looksLikeOutline('- One line'));
   assert.ok(!looksLikeOutline('A paragraph.\nAnother line.'));
+});
+
+const ops = await import('../web/src/engine/ops.ts');
+
+test('clipboard: cells, branch copies and object copies', () => {
+  assert.deepEqual(ops.clipTable('', 'Name\tAge\nAsha\t31'), [['Name', 'Age'], ['Asha', '31']]);
+  assert.deepEqual(ops.clipTable('', 'Name\tAge\n\t30'), [['Name', 'Age'], ['', '30']]); // an empty first cell
+  assert.equal(ops.clipTable('', 'A\n\tB'), null); // an indented list
+  assert.equal(ops.clipTable('', '\tA\n\t\tB'), null);
+  assert.equal(ops.clipTable('', 'Just text'), null);
+
+  const o = mm.mindmapFromOutline('Root\n  A\n    A1\n  B\n    B1', { x: 0, y: 0 }, 1);
+  const id = (text: string) => Object.entries(o).find(([k, v]) => k.startsWith('n.') && (v as any).text === text)![0].slice(2);
+  const [a, a1, b] = [id('A'), id('A1'), id('B')];
+  Object.assign(o, { [`n.${a}`]: { ...(o as any)[`n.${a}`], text: 'Q3 plan\nowner: Ana', color: 'red', icon: 'star' }, [`n.${a1}`]: { ...(o as any)[`n.${a1}`], text: '1. Hire' }, [`n.${b}`]: { ...(o as any)[`n.${b}`], text: '' } });
+  const c = ops.clipOf([o.id], [o], { id: o.id, node: a });
+  assert.equal(c.text, 'Q3 plan owner: Ana\n  1. Hire'); // readable for other apps
+  assert.ok(c.html.includes('<li>Q3 plan<br>owner: Ana<ul><li>1. Hire</li></ul></li>'));
+  assert.deepEqual(ops.branchOf(c.html), { text: 'Q3 plan\nowner: Ana', color: 'red', icon: 'star', children: [{ text: '1. Hire', children: [] }] });
+  // Pasted on B, the branch keeps its text, its shape and its look.
+  const p = mm.addTrees(o, b, [ops.branchOf(c.html)!])!;
+  Object.assign(o, p);
+  assert.equal(mm.toOutline(o, false, b), '\n  B1\n  Q3 plan owner: Ana\n    1. Hire'); // B is empty; the branch goes last
+  const pasted = Object.values(p).find((v: any) => v?.text === 'Q3 plan\nowner: Ana') as any;
+  assert.equal(pasted.color, 'red');
+  assert.equal(pasted.icon, 'star');
+
+  // Whole objects: readable text, and the objects themselves for pragmatic. The focused root copies the whole map.
+  const root = Object.entries(o).find(([k, v]) => k.startsWith('n.') && (v as any).parent === null)![0].slice(2);
+  assert.deepEqual(ops.fromClipHtml(ops.clipOf([o.id], [o], { id: o.id, node: root }).html), [o]);
+  assert.equal(ops.branchOf(ops.clipOf([], [o], { id: o.id, node: a }).html), null); // focus without selection: nothing of it
+  const all = ops.clipOf([o.id], [o], null);
+  assert.ok(all.text.startsWith('Root\n  Q3 plan owner: Ana'));
+  assert.deepEqual(ops.fromClipHtml(all.html), [o]);
+  assert.deepEqual(ops.deserialize(all.fallback), [o]); // plain http: the objects go as text
+});
+
+test('mind map: a node left empty goes unless it has branches or an icon; an empty root takes its map', () => {
+  const o = mm.mindmapFromOutline('Root\n  A\n    A1\n  B\n  C', { x: 0, y: 0 }, 1);
+  const id = (text: string) => Object.entries(o).find(([k, v]) => k.startsWith('n.') && (v as any).text === text)![0].slice(2);
+  const empty = (n: string, extra = {}) => Object.assign(o, { [`n.${n}`]: { ...(o as any)[`n.${n}`], text: '', ...extra } });
+  assert.equal(mm.emptyNodeFate(o, id('B'), 1), 'keep'); // has text
+  const b = id('B'); empty(b);
+  assert.equal(mm.emptyNodeFate(o, b, 1), 'node');
+  const a = id('A'); empty(a, { collapsed: true });
+  assert.equal(mm.emptyNodeFate(o, a, 1), 'keep'); // a folded branch hangs from it
+  const c = id('C'); empty(c, { icon: 'star' });
+  assert.equal(mm.emptyNodeFate(o, c, 1), 'keep'); // an icon
+  const lone = mm.mindmapFromOutline('Root', { x: 0, y: 0 }, 1), r = Object.keys(lone).find((k) => k.startsWith('n.'))!.slice(2);
+  Object.assign(lone, { [`n.${r}`]: { ...(lone as any)[`n.${r}`], text: ' ' } });
+  assert.equal(mm.emptyNodeFate(lone, r, 2), 'map');
+  assert.equal(mm.emptyNodeFate(lone, r, 1), 'keep'); // all the board has
+});
+
+test('mind map: ⌥↑/⌥↓ move a node even when siblings share an order', () => {
+  const o = mm.mindmapFromOutline('Root\n  A\n  B\n  C', { x: 0, y: 0 }, 1);
+  const id = (text: string) => Object.entries(o).find(([k, v]) => k.startsWith('n.') && (v as any).text === text)![0].slice(2);
+  Object.assign(o, { [`n.${id('B')}`]: { ...(o as any)[`n.${id('B')}`], order: 1 } }); // A and B both at 1
+  const before = mm.toOutline(o).split('\n').slice(1).map((l) => l.trim());
+  const first = before[0], second = before[1];
+  Object.assign(o, mm.moveNode(o, id(first), 1));
+  assert.deepEqual(mm.toOutline(o).split('\n').slice(1).map((l) => l.trim()), [second, first, 'C']);
 });
 
 test('mind map layout: children right of the parent, no overlaps, collapsed hides the subtree', () => {

@@ -5,12 +5,12 @@ import { RichSource, RichUndo, requestBarPop, whenEditorOpens } from './rich.tsx
 import { TextSource } from './ytext.ts';
 import { fromExcalidraw } from '../../../shared/excalidraw.ts';
 import { placeBatch, translate, type Rect } from '../../../shared/layout.ts';
-import { addChild, addParent, addSibling, addTrees, deleteNode, foldAll, indentNode, mindmapFromOutline, mindmapFromTree, moveNode, neighbour, outdentNode, setNode } from '../../../shared/mindmapOps.ts';
-import { looksLikeOutline, parseForest } from '../../../shared/mindmap.ts';
+import { addChild, addParent, addSibling, addTrees, deleteNode, emptyNodeFate, foldAll, indentNode, mindmapFromOutline, mindmapFromTree, moveNode, neighbour, outdentNode, setNode } from '../../../shared/mindmapOps.ts';
+import { looksLikeOutline, parseForest, type OutlineNode } from '../../../shared/mindmap.ts';
 import { addCol, addRow, deleteCol, deleteRow, newTable } from '../../../shared/tableOps.ts';
 import {
   DEFAULTS, DEVICES, FRAME_Z, frameScreen, SECTION_Z, STACK_Z, TASK_H, type TaskObj, type StackObj, SHAPE_SIZE, WF_DEFAULTS, cellKey, isBox, isContainer, newId, type BoardObject, type BoxObject, type ConnectorObj, type DrawObj, type End,
-  mindmapNodes, type MindmapObj, type ShapeKind, type Side, type TableObj,
+  type MindmapObj, type ShapeKind, type Side, type TableObj,
 } from '../../../shared/model.ts';
 import { anchor, connectorGeometry, type Pt } from '../../../shared/route.ts';
 import { BoxView, ConnectorView, strokePath } from './ObjectView.tsx';
@@ -27,7 +27,7 @@ import { BottomBar, Toolbar, type Flyout, type InsertKind, type Mode, type Tool 
 import { InsertDialog } from './InsertDialog.tsx';
 import { imageObject, mermaidObjects } from './insert.ts';
 import {
-  SECTION_TITLE_H, byIdOf, clipOf, clipTable, cloneObjects, contains, objectBounds, deserialize, fromClipHtml, hitBox, intersects, isBranchClip, sectionContents, selectionBounds, snapRect, withInnerConnectors, type Guides,
+  SECTION_TITLE_H, branchOf, byIdOf, clipOf, clipTable, cloneObjects, contains, objectBounds, deserialize, fromClipHtml, hitBox, intersects, sectionContents, selectionBounds, snapRect, withInnerConnectors, type Guides,
 } from './ops.ts';
 import { LOCAL, type Board } from './useBoard.ts';
 import { anchorPoint, CommentsPanel, Composer, Pin, ThreadView } from './Comments.tsx';
@@ -294,6 +294,8 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
     if (ids.length) deleteObjects(doc, ids, LOCAL);
     setSelection([]);
   };
+  // Cut takes what copy took: with a mind map node focused, that node and its branches, not the whole map.
+  const removeCut = () => (sub?.node && selection.includes(sub.id) && byId.get(sub.id)?.type === 'mindmap' ? mindmapAct(sub.id, sub.node, 'Delete') : removeSelected());
   const insertBatch = (batch: BoardObject[], at?: Pt, focus = true) => {
     const b = selectionBounds(batch.map((o) => o.id), byIdOf(batch));
     const c = at ?? viewCenter();
@@ -493,9 +495,8 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
     setTimeout(() => mindmapAct(id, node, then));
   }, [update]);
 
-  // A node left empty when typing on it ends (any key, a click elsewhere) goes, unless branches hang from it. An
-  // empty root takes its map with it, unless the map is all the board has. Focus moves back only if it is still
-  // on that node, so a click elsewhere keeps its own.
+  // A node left empty when typing on it ends (any key, a click elsewhere) goes; see emptyNodeFate for when it stays.
+  // Focus moves back only if it is still on that node, so a click elsewhere keeps its own.
   const editingNode = useRef<{ id: string; node: string } | null>(null);
   const keepEmpty = useRef<string | null>(null);
   useEffect(() => {
@@ -503,13 +504,12 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
     editingNode.current = now;
     if (!was || (now?.id === was.id && now.node === was.node)) return;
     if (keepEmpty.current === was.node) { keepEmpty.current = null; return; }
-    const o = mapOf(was.id), n = o?.[`n.${was.node}`], t = o?.[`t.${was.node}`];
-    if (!o || !n || (typeof t === 'string' ? t : n.text).trim() || mindmapNodes(o).some(([, m]) => m.parent === was.node)) return;
-    if (n.parent) {
-      const back = neighbour(o, was.node, 'prev') ?? n.parent;
-      update([deleteNode(o, was.node)!]);
+    const o = mapOf(was.id), fate = o ? emptyNodeFate(o, was.node, objects.length) : 'keep';
+    if (fate === 'node') {
+      const back = neighbour(o!, was.node, 'prev') ?? o![`n.${was.node}`].parent!;
+      update([deleteNode(o!, was.node)!]);
       setSub((cur) => (cur?.id === was.id && cur.node === was.node ? { id: was.id, node: back } : cur));
-    } else if (latest.current.size > 1) {
+    } else if (fate === 'map') {
       deleteObjects(doc, [was.id], LOCAL);
       setSelection((cur) => cur.filter((x) => x !== was.id));
       setSub((cur) => (cur?.id === was.id ? null : cur));
@@ -1036,7 +1036,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
   cropIdRef.current = cropId;
   const lastIcon = useRef('star');
   if (tool.kind === 'icon') lastIcon.current = tool.icon;
-  const keyNow = { selected, selection, editing, objects, tool, mode, setMode, setExpanded, canEdit, canComment, pasteStyle, saveDefaultStyle, groupSelected, ungroupSelected, toggleQuickDots, duplicate, removeSelected, arrange, toggleLock, fitContent, zoomCenter, vp, update, sub, subEdit, mindmapAct, moveCell, quickAdd, focusNode };
+  const keyNow = { selected, selection, editing, objects, tool, mode, setMode, setExpanded, canEdit, canComment, pasteStyle, saveDefaultStyle, groupSelected, ungroupSelected, toggleQuickDots, duplicate, removeSelected, removeCut, arrange, toggleLock, fitContent, zoomCenter, vp, update, sub, subEdit, mindmapAct, moveCell, quickAdd, focusNode };
   const keyState = useRef(keyNow);
   keyState.current = keyNow;
   useEffect(() => {
@@ -1067,7 +1067,9 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
         if (e.key === 'Tab') { e.preventDefault(); return s.mindmapAct(map.id, node, e.shiftKey ? 'ShiftTab' : 'Tab'); }
         if (e.key === 'Enter') { e.preventDefault(); return s.mindmapAct(map.id, node, mod ? 'ModEnter' : e.altKey ? 'AltEnter' : 'Enter'); }
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); return s.mindmapAct(map.id, node, 'Delete'); }
-        if (mod && e.code === 'Slash') { e.preventDefault(); return s.mindmapAct(map.id, node, e.shiftKey ? 'FoldAll' : 'Collapse'); }
+        // ⌘/ collapses, ⇧⌘/ folds all. "/" by its character, so layouts where "/" needs ⇧ (German: ⇧7) still collapse.
+        if (mod && (e.key === '?' || (e.code === 'Slash' && e.shiftKey))) { e.preventDefault(); return s.mindmapAct(map.id, node, 'FoldAll'); }
+        if (mod && (e.key === '/' || e.code === 'Slash')) { e.preventDefault(); return s.mindmapAct(map.id, node, 'Collapse'); }
         if (e.ctrlKey && (e.metaKey || e.altKey) && (e.key === ']' || e.key === '[')) { e.preventDefault(); return s.mindmapAct(map.id, node, e.key === ']' ? 'Indent' : 'Outdent'); }
         if (e.key === 'X' && e.shiftKey && !mod) { e.preventDefault(); return requestBarPop('icon'); }
         if (e.key === 'Escape') return s.focusNode(map.id, null);
@@ -1201,7 +1203,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
     const files = all.filter((f) => f.type.startsWith('image/'));
     try {
       if (as === 'table') {
-        const rows = text.includes('|') ? parseMarkdownTable(text) : text.trim().split(/\r?\n/).map((l) => l.split('\t'));
+        const rows = text.includes('|') ? parseMarkdownTable(text) : clipTable(html, text) ?? text.trim().split(/\r?\n/).map((l) => [l]);
         if (!rows.length || !rows[0].length) return onToast('Nothing to paste as a table');
         return void insertBatch([tableFrom(rows, { x: 0, y: 0 }, maxZ(doc) + 1)], at);
       }
@@ -1221,22 +1223,23 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
       }
       const rows = clipTable(html, text);
       if (rows) return void insertBatch([tableFrom(rows, { x: 0, y: 0 }, maxZ(doc) + 1)], at);
-      // Lines pasted on a focused mind map node become its branches.
+      // A copied branch, or lines, pasted on a focused mind map node become its branches.
+      const branch = branchOf(html), trees = branch ? [branch] : parseForest(text, true);
       const map = sub?.node ? byId.get(sub.id) : undefined;
-      if (map?.type === 'mindmap' && text.trim()) {
-        const p = addTrees(map, sub!.node!, parseForest(text));
+      if (map?.type === 'mindmap' && trees.length) {
+        const p = addTrees(map, sub!.node!, trees);
         return void (p && update([p]));
       }
       if (isUrl(text)) return void addLink(text, at ?? viewCenter());
-      if (isBranchClip(html) || looksLikeOutline(text)) return void insertBatch(mindmapsOf(text), at);
+      if (branch || looksLikeOutline(text, html)) return void insertBatch(mindmapsOf(trees), at);
       if (text.trim()) insertBatch([{ ...DEFAULTS.text, id: newId(), z: maxZ(doc) + 1, type: 'text', x: 0, y: 0, w: Math.min(600, text.length * 10 + 16), h: 32 * text.split('\n').length, text }], at);
     } catch (err) { onToast(`Paste failed: ${(err as Error).message}`); }
   };
   const copyClip = () => { const c = clipOf(selection, objects, sub); return copyRich(c.text, c.html, c.fallback); };
-  // One mind map per top-level line of an outline, stacked.
-  const mindmapsOf = (text: string) => {
+  // One mind map per outline tree, stacked.
+  const mindmapsOf = (trees: OutlineNode[]) => {
     let y = 0;
-    return parseForest(text).map((t, i) => { const m = mindmapFromTree(t, { x: 0, y }, maxZ(doc) + 1 + i); y += m.h + 40; return m; });
+    return trees.map((t, i) => { const m = mindmapFromTree(t, { x: 0, y }, maxZ(doc) + 1 + i); y += m.h + 40; return m; });
   };
   // The menu's Paste reads the clipboard itself (the browser may ask for permission).
   const pasteFromClipboard = async (as?: 'text' | 'table', at?: Pt) => {
@@ -1250,7 +1253,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
         if (item.types.includes('text/plain')) text = await (await item.getType('text/plain')).text();
         if (item.types.includes('text/html')) html = await (await item.getType('text/html')).text();
       }
-      await pasteData(as ? [] : files, text, as, at, as ? '' : html);
+      await pasteData(as ? [] : files, text, as, at, html);
     } catch { onToast('Use ⌘V to paste: the browser did not allow reading the clipboard'); }
   };
   useEffect(() => {
@@ -1261,7 +1264,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
       const c = clipOf(s.selection, s.objects, s.sub);
       e.clipboardData?.setData('text/plain', c.text);
       e.clipboardData?.setData('text/html', c.html);
-      if (cut) s.removeSelected();
+      if (cut) s.removeCut();
     };
     const copy = (e: ClipboardEvent) => onCopy(e, false), cut = (e: ClipboardEvent) => onCopy(e, true), paste = (e: ClipboardEvent) => pasteRef.current(e);
     addEventListener('copy', copy); addEventListener('cut', cut); addEventListener('paste', paste);
@@ -1287,8 +1290,11 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
       if (f.type.startsWith('image/')) return addImages([f], at);
       if (/\.(mmd|mermaid)$/i.test(f.name)) return void insertBatch(await mermaidObjects(await f.text(), maxZ(doc) + 1), at);
       if (/\.(md|markdown|txt)$/i.test(f.name)) {
-        const maps = mindmapsOf(await f.text());
-        return void (maps.length ? insertBatch(maps, at) : onToast('This file has no lines to make a mind map from'));
+        const trees = parseForest(await f.text(), true);
+        if (!trees.length) return onToast('This file has no lines to make a mind map from');
+        // A flat list of lines is one mind map named after the file, not a map per line.
+        const flat = trees.length > 1 && trees.every((t) => !t.children.length);
+        return void insertBatch(mindmapsOf(flat ? [{ text: f.name.replace(/\.[^.]+$/, ''), children: trees }] : trees), at);
       }
       const data = JSON.parse(await f.text());
       if (!Array.isArray(data.elements)) throw new Error('This file has no Excalidraw elements');
@@ -1349,7 +1355,10 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
         e.preventDefault();
         const p = worldOf(e.clientX, e.clientY);
         const hit = hitBox(p, objects, vp.zoom);
-        if (hit && !selection.includes(hit.id)) setSelection([hit.id]);
+        // On a mind map node, the menu acts on that node (Copy, Cut, Delete), as a click would focus it.
+        const node = (e.target as Element).closest?.<HTMLElement>('[data-node]');
+        if (canEdit && node?.dataset.map && node.dataset.node) focusNode(node.dataset.map, node.dataset.node);
+        else if (hit && !selection.includes(hit.id)) { setSelection([hit.id]); setSub(null); }
         const r = el.current!.getBoundingClientRect();
         setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, world: p });
       }}
@@ -1555,7 +1564,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
           { label: 'Copy as…', icon: <Files size={15} />, sub: copyAsItems },
           { label: 'Copy link to board position', icon: <Link2 size={15} />, onClick: copyPositionLink },
           ...edit([
-            { label: 'Cut', icon: <Scissors size={15} />, keys: '⌘X', onClick: () => copyClip().then(removeSelected) },
+            { label: 'Cut', icon: <Scissors size={15} />, keys: '⌘X', onClick: () => copyClip().then(removeCut) },
             { label: 'Duplicate', icon: <CopyPlus size={15} />, keys: '⌘D', onClick: () => duplicate() },
             { label: 'Delete', icon: <Trash2 size={15} />, keys: '⌫', danger: true, onClick: removeSelected },
           ]),

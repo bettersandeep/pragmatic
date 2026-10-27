@@ -1,5 +1,5 @@
 // Mind map edits as field patches (`n.<id>` keys), usable with updateObjects on any client or the server.
-import { newId, type MindmapObj, type MNode } from './model.ts';
+import { mindmapNodes, newId, type MindmapObj, type MNode } from './model.ts';
 import { buildTree, estimateMeasure, layoutMindmap, type Tree } from './mindmapLayout.ts';
 import { parseOutline, type OutlineNode } from './mindmap.ts';
 
@@ -70,13 +70,17 @@ export function outdentNode(o: MindmapObj, nodeId: string): Patch | null {
   return { id: o.id, [key(nodeId)]: { ...o[key(nodeId)], parent: p.parent, order: next ? (p.order + next[1].order) / 2 : p.order + 1 } };
 }
 
-// ⌥↑ / ⌥↓: the node swaps places with the sibling before (-1) or after (1) it. Null at either end.
+// ⌥↑ / ⌥↓: the node swaps places with the sibling before (-1) or after (1) it. Null at either end. Two people adding
+// a child at once can give siblings the same order; then the siblings are numbered again, so the swap moves.
 export function moveNode(o: MindmapObj, nodeId: string, delta: -1 | 1): Patch | null {
   const n = node(o, nodeId);
   if (!n || n.parent === null) return null;
-  const sibs = siblings(o, n.parent), other = sibs[sibs.findIndex(([id]) => id === nodeId) + delta];
+  const sibs = siblings(o, n.parent), i = sibs.findIndex(([id]) => id === nodeId), other = sibs[i + delta];
   if (!other) return null;
-  return { id: o.id, [key(nodeId)]: { ...o[key(nodeId)], order: other[1].order }, [key(other[0])]: { ...o[key(other[0])], order: n.order } };
+  if (other[1].order !== n.order)
+    return { id: o.id, [key(nodeId)]: { ...o[key(nodeId)], order: other[1].order }, [key(other[0])]: { ...o[key(other[0])], order: n.order } };
+  [sibs[i], sibs[i + delta]] = [sibs[i + delta], sibs[i]];
+  return Object.fromEntries([['id', o.id], ...sibs.map(([id], j) => [key(id), { ...o[key(id)], order: j + 1 }])]) as Patch;
 }
 
 // ⇧⌘/: fold every branch under the node, or unfold them all when all are folded. The node itself opens.
@@ -92,19 +96,39 @@ export function foldAll(o: MindmapObj, nodeId: string): Patch | null {
   return patch;
 }
 
+// An outline tree as new nodes (`n.<id>` fields) in `into`, with the look a copied branch carries.
+const LOOK = ['color', 'icon', 'iconDeco', 'dash'] as const;
+function writeTree(into: Record<string, unknown>, t: OutlineNode, parent: string | null, order: number) {
+  const id = newId();
+  into[key(id)] = { text: t.text, parent, order, ...Object.fromEntries(LOOK.filter((k) => t[k] !== undefined).map((k) => [k, t[k]])) };
+  t.children.forEach((c, i) => writeTree(into, c, id, i + 1));
+}
+
 // Pasted or imported outline trees as the last children of a node.
 export function addTrees(o: MindmapObj, parentId: string, trees: OutlineNode[]): Patch | null {
   const parent = o[key(parentId)];
   if (!parent || !trees.length) return null;
   const patch: Patch = { id: o.id, ...(parent.collapsed ? { [key(parentId)]: { ...parent, collapsed: false } } : {}) };
-  const add = (t: OutlineNode, p: string, order: number) => {
-    const id = newId();
-    patch[key(id)] = { text: t.text, parent: p, order };
-    t.children.forEach((c, i) => add(c, id, i + 1));
-  };
   const last = siblings(o, parentId).at(-1)?.[1].order ?? 0;
-  trees.forEach((t, i) => add(t, parentId, last + i + 1));
+  trees.forEach((t, i) => writeTree(patch, t, parentId, last + i + 1));
   return patch;
+}
+
+// The branch from a node as an outline tree with each node's look, for copying.
+export function branchTree(o: MindmapObj, nodeId: string): OutlineNode | null {
+  const conv = (t: Tree): OutlineNode => ({
+    text: t.node.text, children: t.children.map(conv), ...Object.fromEntries(LOOK.filter((k) => t.node[k] !== undefined).map((k) => [k, t.node[k]])),
+  });
+  const t = subtree(o, nodeId);
+  return t && conv(t);
+}
+
+// What happens to a node left empty when typing on it ends: it stays when it has branches or an icon; otherwise it
+// goes, and an empty root takes its map with it, unless the map is all the board has (`objects` on the board).
+export function emptyNodeFate(o: MindmapObj, nodeId: string, objects: number): 'keep' | 'node' | 'map' {
+  const n = mindmapNodes(o).find(([id]) => id === nodeId)?.[1];
+  if (!n || n.text.trim() || n.icon || mindmapNodes(o).some(([, m]) => m.parent === nodeId)) return 'keep';
+  return n.parent ? 'node' : objects > 1 ? 'map' : 'keep';
 }
 
 // Neighbours for arrow-key navigation, in screen terms for a horizontal map.
@@ -130,7 +154,7 @@ export function toOutline(o: MindmapObj, withIds = false, nodeId?: string): stri
   if (!tree) return '';
   const lines: string[] = [];
   const walk = (t: Tree, d: number) => {
-    lines.push(`${'  '.repeat(d)}${t.node.text}${withIds ? `  [${t.id}]` : ''}`);
+    lines.push(`${'  '.repeat(d)}${t.node.text.replace(/\s*\n\s*/g, ' ')}${withIds ? `  [${t.id}]` : ''}`);
     t.children.forEach((c) => walk(c, d + 1));
   };
   walk(tree, 0);
@@ -143,12 +167,7 @@ export const mindmapFromOutline = (src: string, at: { x: number; y: number }, z:
 
 export function mindmapFromTree(root: OutlineNode, at: { x: number; y: number }, z: number, layout: MindmapObj['layout'] = 'horizontal'): MindmapObj {
   const o = { id: newId(), z, type: 'mindmap', x: at.x, y: at.y, w: 0, h: 0, rx: 0, ry: 0, layout, edge: 'curvy', fontSize: 'm' } as MindmapObj;
-  const add = (t: OutlineNode, parent: string | null, order: number) => {
-    const id = newId();
-    (o as Record<string, unknown>)[key(id)] = { text: t.text, parent, order };
-    t.children.forEach((c, i) => add(c, id, i + 1));
-  };
-  add(root, null, 0);
+  writeTree(o as Record<string, unknown>, root, null, 0);
   const l = layoutMindmap(o, estimateMeasure);
   if (l) Object.assign(o, { w: l.w, h: l.h, rx: l.rx, ry: l.ry });
   return o;

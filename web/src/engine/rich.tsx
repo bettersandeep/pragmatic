@@ -9,7 +9,7 @@ import { baseKeymap, chainCommands, exitCode, toggleMark } from 'prosemirror-com
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { inputRules, wrappingInputRule } from 'prosemirror-inputrules';
 import { initProseMirrorDoc, ySyncPlugin } from 'y-prosemirror';
-import { safeHref, type ListKind, type Mark, type RichJSON } from '../../../shared/richtext.ts';
+import { escapeHtml, safeHref, type ListKind, type Mark, type RichJSON } from '../../../shared/richtext.ts';
 import { api, type Person } from '../api.ts';
 
 // Rich text of board objects: ProseMirror on the object's Y.XmlFragment (see shared/richtext.ts for the data).
@@ -68,7 +68,7 @@ function blocksView(blocks: RichJSON): ReactNode {
 export const RichView = ({ json }: { json: RichJSON }) => <>{blocksView(json)}</>;
 
 // The same markup as HTML text, for measuring (measure.ts).
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const esc = escapeHtml;
 export function richHTML(blocks: RichJSON): string {
   const inline = (inl: Inline[]) => inl.map((i) => {
     if ('br' in i) return '<br>';

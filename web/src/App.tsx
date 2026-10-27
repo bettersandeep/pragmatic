@@ -63,8 +63,8 @@ function Shell({ user }: { user: User }) {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   // ⌘E shows or hides the sidebar, as in Whimsical. This browser remembers the choice.
-  const [side, setSide] = useState(() => { try { return localStorage.getItem('pragmatic.sidebar') !== 'hidden'; } catch { return true; } });
-  const toggleSide = useCallback(() => setSide((v) => { try { localStorage.setItem('pragmatic.sidebar', v ? 'hidden' : 'shown'); } catch { /* private window */ } return !v; }), []);
+  const [side, setSide] = useState(() => { try { return localStorage.getItem('pragmatic:sidebar') !== 'hidden'; } catch { return true; } });
+  const toggleSide = useCallback(() => setSide((v) => { try { localStorage.setItem('pragmatic:sidebar', v ? 'hidden' : 'shown'); } catch { /* private window */ } return !v; }), []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === 'KeyE') { e.preventDefault(); toggleSide(); } };
     addEventListener('keydown', key);
@@ -87,7 +87,7 @@ function Shell({ user }: { user: User }) {
     <div className="shell">
       {side && <Sidebar user={user} items={items} activeId={boardId ?? docId} path={path} unread={unread} onCreate={create} onChanged={refresh} onHide={toggleSide} />}
       <main className="main">
-        {showSide && !boardId && !docId && <SidebarButton show onClick={showSide} />}
+        {showSide && !current && <SidebarButton show onClick={showSide} />}
         {docId ? (
           <Suspense fallback={<div className="empty"><div className="spinner" /></div>}>
             <Doc key={docId} id={docId} theme={theme} user={user} item={current} onItem={setCurrent}
