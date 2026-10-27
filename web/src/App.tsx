@@ -145,10 +145,10 @@ function Sidebar({ user, items, activeId, path, unread, onCreate, onChanged }: {
   const local = useLocalMode();
   return (
     <aside className="sidebar">
-      <div className="brand">
+      <Link to="/" className="brand">
         <img className="logo-mark" src="/favicon.svg" alt="" />
         <span>pragmatic</span>
-      </div>
+      </Link>
       <input className="search" type="search" placeholder="Search boards" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search boards" />
       {results ? (
         <nav className="tree">
