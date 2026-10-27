@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { copyText } from './clipboard.ts';
-import { Inbox as InboxIcon } from 'lucide-react';
+import { Inbox as InboxIcon, PanelLeft } from 'lucide-react';
 import { InboxPage } from './InboxPage.tsx';
 import { api, ago, itemPath, meOnce, navigate, type Item, type Me, type PersonRow, type Token, type User } from './api.ts';
 import { InvitePage, SignIn } from './SignIn.tsx';
@@ -62,6 +62,15 @@ function Shell({ user }: { user: User }) {
   useEffect(() => { countUnread(); }, [path]);
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  // ⌘E shows or hides the sidebar, as in Whimsical. This browser remembers the choice.
+  const [side, setSide] = useState(() => { try { return localStorage.getItem('pragmatic.sidebar') !== 'hidden'; } catch { return true; } });
+  const toggleSide = useCallback(() => setSide((v) => { try { localStorage.setItem('pragmatic.sidebar', v ? 'hidden' : 'shown'); } catch { /* private window */ } return !v; }), []);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === 'KeyE') { e.preventDefault(); toggleSide(); } };
+    addEventListener('keydown', key);
+    return () => removeEventListener('keydown', key);
+  }, [toggleSide]);
+  const showSide = side ? undefined : toggleSide;
 
   const boardId = path.match(/^\/b\/([\w-]+)/)?.[1], docId = path.match(/^\/d\/([\w-]+)/)?.[1];
   useEffect(() => { if (!boardId && !docId) setCurrent(null); }, [boardId, docId]);
@@ -76,17 +85,18 @@ function Shell({ user }: { user: User }) {
 
   return (
     <div className="shell">
-      <Sidebar user={user} items={items} activeId={boardId ?? docId} path={path} unread={unread} onCreate={create} onChanged={refresh} />
+      {side && <Sidebar user={user} items={items} activeId={boardId ?? docId} path={path} unread={unread} onCreate={create} onChanged={refresh} onHide={toggleSide} />}
       <main className="main">
+        {showSide && !boardId && !docId && <SidebarButton show onClick={showSide} />}
         {docId ? (
           <Suspense fallback={<div className="empty"><div className="spinner" /></div>}>
             <Doc key={docId} id={docId} theme={theme} user={user} item={current} onItem={setCurrent}
-              header={<TitleBar item={current} items={items} onRenamed={(i) => { setCurrent(i); refresh(); }} />} />
+              header={<TitleBar item={current} items={items} onShowSidebar={showSide} onRenamed={(i) => { setCurrent(i); refresh(); }} />} />
           </Suspense>
         ) : boardId ? (
           <Suspense fallback={<div className="empty"><div className="spinner" /></div>}>
             <Board key={boardId} id={boardId} theme={theme} user={user} onItem={setCurrent}
-              header={<TitleBar item={current} items={items} onRenamed={(i) => { setCurrent(i); refresh(); }} />} />
+              header={<TitleBar item={current} items={items} onShowSidebar={showSide} onRenamed={(i) => { setCurrent(i); refresh(); }} />} />
           </Suspense>
         ) : path === '/trash' ? <Trash onChanged={refresh} />
           : path === '/settings' ? <Settings user={user} />
@@ -97,7 +107,13 @@ function Shell({ user }: { user: User }) {
   );
 }
 
-function TitleBar({ item, items, onRenamed }: { item: Item | null; items: Item[]; onRenamed: (i: Item) => void }) {
+const SidebarButton = ({ show, onClick }: { show?: boolean; onClick: () => void }) => (
+  <button className={`icon-btn ${show ? 'side-show' : 'side-hide'}`} onClick={onClick} title={`${show ? 'Show' : 'Hide'} sidebar (⌘E)`} aria-label={`${show ? 'Show' : 'Hide'} sidebar`}>
+    <PanelLeft size={16} />
+  </button>
+);
+
+function TitleBar({ item, items, onRenamed, onShowSidebar }: { item: Item | null; items: Item[]; onRenamed: (i: Item) => void; onShowSidebar?: () => void }) {
   const [title, setTitle] = useState('');
   useEffect(() => setTitle(item?.title ?? ''), [item]);
   if (!item) return null;
@@ -110,6 +126,7 @@ function TitleBar({ item, items, onRenamed }: { item: Item | null; items: Item[]
   };
   return (
     <div className="crumbs">
+      {onShowSidebar && <SidebarButton show onClick={onShowSidebar} />}
       <span className="crumb">{item.scope === 'team' ? 'Team' : 'Private'}</span>
       {trail.map((f) => <span key={f.id} className="crumb">{f.title}</span>)}
       <input className="title-input" value={title} aria-label="Board title" onChange={(e) => setTitle(e.target.value)}
@@ -120,8 +137,8 @@ function TitleBar({ item, items, onRenamed }: { item: Item | null; items: Item[]
 
 type CreateFn = (kind: Item['kind'], scope: Item['scope'], parent?: string | null, template?: { id: string; title: string }) => Promise<Item>;
 
-function Sidebar({ user, items, activeId, path, unread, onCreate, onChanged }: {
-  user: User; items: Item[]; activeId?: string; path: string; unread: number; onCreate: CreateFn; onChanged: () => void;
+function Sidebar({ user, items, activeId, path, unread, onCreate, onChanged, onHide }: {
+  user: User; items: Item[]; activeId?: string; path: string; unread: number; onCreate: CreateFn; onChanged: () => void; onHide: () => void;
 }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Item[] | null>(null);
@@ -145,10 +162,13 @@ function Sidebar({ user, items, activeId, path, unread, onCreate, onChanged }: {
   const local = useLocalMode();
   return (
     <aside className="sidebar">
-      <Link to="/" className="brand">
-        <img className="logo-mark" src="/favicon.svg" alt="" />
-        <span>pragmatic</span>
-      </Link>
+      <div className="side-head">
+        <Link to="/" className="brand">
+          <img className="logo-mark" src="/favicon.svg" alt="" />
+          <span>pragmatic</span>
+        </Link>
+        <SidebarButton onClick={onHide} />
+      </div>
       <input className="search" type="search" placeholder="Search boards" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search boards" />
       {results ? (
         <nav className="tree">

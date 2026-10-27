@@ -11,6 +11,12 @@ export async function copyText(text: string): Promise<void> {
   if (!ok) throw new Error('the browser did not allow copying');
 }
 
+// Readable text plus HTML for apps that read it (pragmatic keeps its objects there). Without the clipboard API: `fallback` as text.
+export async function copyRich(text: string, html: string, fallback: string): Promise<void> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return copyText(fallback);
+  await navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob([text], { type: 'text/plain' }), 'text/html': new Blob([html], { type: 'text/html' }) })]);
+}
+
 const NEEDS_HTTPS = 'copying pictures needs https (or localhost); use Export to download it instead';
 // Pictures and other types; `data` may still be rendering (keeps the click's permission while it does).
 export async function copyBlob(type: string, data: Blob | Promise<Blob>): Promise<void> {

@@ -160,7 +160,7 @@ const ALL_TOOLS: ToolItem[] = [
   { section: 'Insert', label: 'Image', keys: 'I', insert: 'image' },
   { section: 'Insert', label: 'Mermaid diagram', insert: 'mermaid' },
   { section: 'Insert', label: 'Mind map from outline', insert: 'mindmap' },
-  { section: 'Insert', label: 'Import .excalidraw / .mmd file', insert: 'file' },
+  { section: 'Insert', label: 'Import a file (.excalidraw, .mmd, .md, .txt)', insert: 'file' },
   { section: 'Insert', label: 'Timer', insert: 'timer' },
   { section: 'Insert', label: 'Voting', insert: 'voting' },
   { section: 'Diagram', label: 'Sticky note', keys: 'N', tool: { kind: 'sticky' } },

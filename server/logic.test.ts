@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 
 process.env.PRAGMATIC_PGLITE = 'memory';
 process.env.PRAGMATIC_FILES = (await import('node:os')).tmpdir() + '/pragmatic-test-files';
-const { parseOutline } = await import('../shared/mindmap.ts');
+const { parseOutline, parseForest, looksLikeOutline } = await import('../shared/mindmap.ts');
 const { domainAllowed } = await import('./auth.ts');
 const { connectorGeometry, autoSide } = await import('../shared/route.ts');
 const { fromExcalidraw, nearestColor } = await import('../shared/excalidraw.ts');
@@ -140,6 +140,33 @@ test('mind map ops: child, sibling order, parent insert, delete subtree, outline
   assert.equal(mm.addSibling(o, id('Root')), null);
   assert.equal(mm.neighbour(o, id('A.5'), 'prev'), id('before A'));
   assert.equal(mm.neighbour(o, id('Root'), 'child'), id('before A'));
+});
+
+test('mind map ops: reorder, fold all, paste branches, branch outline', () => {
+  const o = mm.mindmapFromOutline('Root\n  A\n    A1\n      A1a\n  B', { x: 0, y: 0 }, 1);
+  const apply = (p: Record<string, unknown> | null) => { assert.ok(p); for (const [k, v] of Object.entries(p!)) if (k !== 'id') (o as any)[k] = v; };
+  const id = (text: string) => Object.entries(o).find(([k, v]) => k.startsWith('n.') && (v as any).text === text)![0].slice(2);
+  apply(mm.moveNode(o, id('A'), 1));
+  assert.equal(mm.toOutline(o), 'Root\n  B\n  A\n    A1\n      A1a');
+  assert.equal(mm.moveNode(o, id('A'), 1), null);
+  assert.equal(mm.moveNode(o, id('Root'), -1), null);
+  apply(mm.foldAll(o, id('A')));
+  assert.equal((o as any)[`n.${id('A1')}`].collapsed, true);
+  assert.equal(mm.foldAll(o, id('B')), null); // no branches under B
+  apply(mm.foldAll(o, id('A')));
+  assert.equal((o as any)[`n.${id('A1')}`].collapsed, false);
+  apply(mm.addTrees(o, id('B'), parseForest('- X\n  - X1\n- Y')));
+  assert.equal(mm.toOutline(o, false, id('B')), 'B\n  X\n    X1\n  Y');
+});
+
+test('outline forest: several roots, list markers, Markdown headings', () => {
+  const f = parseForest('# Plan\nIntro\n## Steps\n1. One\n2) Two\n   - [x] done\n# Later\n• Idea');
+  const show = (n: any, d = 0): string => `${'  '.repeat(d)}${n.text}\n${n.children.map((c: any) => show(c, d + 1)).join('')}`;
+  assert.equal(f.map((n) => show(n)).join(''), 'Plan\n  Intro\n  Steps\n    One\n    Two\n      done\nLater\n  Idea\n');
+  assert.ok(looksLikeOutline('A\n  B'));
+  assert.ok(looksLikeOutline('- A\n- B'));
+  assert.ok(!looksLikeOutline('One line'));
+  assert.ok(!looksLikeOutline('A paragraph.\nAnother line.'));
 });
 
 test('mind map layout: children right of the parent, no overlaps, collapsed hides the subtree', () => {

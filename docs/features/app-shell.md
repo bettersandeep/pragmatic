@@ -17,6 +17,7 @@ Sidebar:
 - The "+" of a section opens a menu: New board, New doc, New folder, From template.
 - Trash, Settings & Claude, the signed-in person, sign out.
 - Search (title and the text on boards and docs).
+- ⌘E or the panel button hides and shows the sidebar; this browser remembers it.
 
 Home page (Recent):
 - Cards of the most recently changed boards and docs.

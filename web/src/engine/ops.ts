@@ -1,6 +1,10 @@
 import { frameScreen, isBox, type BoardObject, type BoxObject } from '../../../shared/model.ts';
 export { cloneObjects, withInnerConnectors } from '../../../shared/clone.ts';
 import { bounds, type Rect } from '../../../shared/layout.ts';
+import { withInnerConnectors } from '../../../shared/clone.ts';
+import { toOutline } from '../../../shared/mindmapOps.ts';
+import { parseForest, type OutlineNode } from '../../../shared/mindmap.ts';
+import { tableData } from '../../../shared/tableOps.ts';
 import { connectorGeometry, type Pt } from '../../../shared/route.ts';
 
 export const byIdOf = (objs: BoardObject[]) => new Map(objs.map((o) => [o.id, o]));
@@ -62,12 +66,61 @@ export function selectionBounds(ids: string[], byId: Map<string, BoardObject>): 
   return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
 }
 
+// A copy carries the objects twice: readable text for other apps (an outline, a table's cells, the words), and the
+// objects themselves in the HTML part for pragmatic. Without the clipboard API (plain http) the objects go as text.
 const CLIP = 'pragmatic/objects:';
 export const serialize = (objs: BoardObject[]) => CLIP + JSON.stringify(objs);
 export const deserialize = (text: string): BoardObject[] | null => {
   if (!text.startsWith(CLIP)) return null;
   try { return JSON.parse(text.slice(CLIP.length)); } catch { return null; }
 };
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const listHtml = (outline: string) => {
+  const ul = (ns: OutlineNode[]): string => `<ul>${ns.map((n) => `<li>${esc(n.text)}${n.children.length ? ul(n.children) : ''}</li>`).join('')}</ul>`;
+  return ul(parseForest(outline));
+};
+const htmlOf = (o: BoardObject) =>
+  o.type === 'mindmap' ? listHtml(toOutline(o))
+  : o.type === 'table' ? `<table>${tableData(o).map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`
+  : plainText([o]) ? `<p>${esc(plainText([o])).replace(/\n/g, '<br>')}</p>` : '';
+// The HTML part: what other apps paste (lists, tables, paragraphs) and, in an attribute, the objects for pragmatic.
+// A copied mind map branch carries only its outline, marked, so pasting it adds branches or makes a mind map.
+export const clipHtml = (objs: BoardObject[]) => `<span data-pragmatic="${encodeURIComponent(serialize(objs))}"></span>${objs.map(htmlOf).join('')}`;
+export const branchHtml = (outline: string) => `<span data-pragmatic-branch=""></span>${listHtml(outline)}`;
+export const isBranchClip = (html: string) => html.includes('data-pragmatic-branch');
+
+// What a copy puts on the clipboard. A focused mind map node copies its branch as an outline.
+export function clipOf(selection: string[], objects: BoardObject[], sub: { id: string; node?: string } | null) {
+  const map = sub?.node ? objects.find((o) => o.id === sub.id) : undefined;
+  if (map?.type === 'mindmap') { const text = toOutline(map, false, sub!.node); return { text, html: branchHtml(text), fallback: text }; }
+  const objs = withInnerConnectors(selection, objects);
+  return { text: plainText(objs), html: clipHtml(objs), fallback: serialize(objs) };
+}
+export const fromClipHtml = (html: string) => {
+  const m = /data-pragmatic="([^"]*)"/.exec(html);
+  return m ? deserialize(decodeURIComponent(m[1])) : null;
+};
+export const plainText = (objs: BoardObject[]) => objs.map((o) =>
+  o.type === 'mindmap' ? toOutline(o)
+  : o.type === 'table' ? tableData(o).map((r) => r.join('\t')).join('\n')
+  : o.type === 'task' || o.type === 'section' || o.type === 'frame' || o.type === 'stack' ? o.title
+  : o.type === 'link' ? o.url
+  : 'text' in o && typeof o.text === 'string' ? o.text : '').filter((t) => t?.trim()).join('\n\n');
+
+// Cells copied from Sheets, Excel or Notion: their HTML table, else tab-separated lines. Leading tabs alone are an
+// indented list, not a table. Capped like a pasted sheet should be.
+export function clipTable(html: string, text: string): string[][] | null {
+  let rows: string[][] = [];
+  const table = /<table/i.test(html) ? new DOMParser().parseFromString(html, 'text/html').querySelector('table') : null;
+  if (table) rows = [...table.querySelectorAll('tr')].map((tr) => [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName)).map((c) => c.textContent!.replace(/\u00a0/g, ' ').trim()));
+  else {
+    const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+    if (lines.every((l) => /[^\t]\t/.test(l))) rows = lines.map((l) => l.split('\t').map((c) => c.replace(/^"([\s\S]*)"$/, '$1').trim()));
+  }
+  rows = rows.filter((r) => r.length).slice(0, 300).map((r) => r.slice(0, 40));
+  const width = Math.max(0, ...rows.map((r) => r.length));
+  return rows.length * width >= 2 ? rows.map((r) => [...r, ...Array(width - r.length).fill('')]) : null;
+}
 
 export type Guides = { x: number[]; y: number[] };
 

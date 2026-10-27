@@ -102,6 +102,10 @@ h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
   background: var(--bg-side); border-right: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 6px; font-weight: 650; font-size: 15px; }
+.side-head { display: flex; align-items: center; justify-content: space-between; }
+.side-head .icon-btn { margin-bottom: 2px; }
+.side-show { position: absolute; left: 12px; top: 12px; z-index: 5; }
+.crumbs .side-show { position: static; margin-left: -6px; }
 .logo-mark { display: block; flex: none; width: 26px; height: 26px; }
 .logo-mark.big { width: 56px; height: 56px; }
 .search {
@@ -134,7 +138,7 @@ a.row:hover, div.row:hover { background: var(--bg-hover); }
 .me img, .avatar { width: 22px; height: 22px; border-radius: 50%; flex: none; }
 .avatar { display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px; font-weight: 650; }
 
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .page { padding: 28px 36px; overflow: auto; height: 100%; }
 .page.narrow { max-width: 820px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }

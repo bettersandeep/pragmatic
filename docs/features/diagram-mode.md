@@ -8,7 +8,9 @@ Objects:
 - Sticky notes, text, sections, icons (Lucide set), images, link cards, freehand marker and highlighter.
 - Mind maps: live trees with horizontal or vertical layout, curvy or angular lines, collapse, drag a node to move its branch.
   Each node can have an icon (⇧X; multicolor, fill or outline) and a solid or dashed line to its parent.
-  Keys: Tab child, Enter sibling, ⌘Enter sibling above, ⌥Enter parent, Shift+Enter line break, ⌘⌃] indent, ⌘⌃[ outdent, ⌘/ collapse.
+  Keys: Tab child, Enter sibling, ⌘Enter sibling above, ⌥Enter parent, Shift+Enter line break, ⌘⌃] indent, ⌘⌃[ outdent, ⌘/ collapse, ⇧⌘/ fold or unfold all branches below.
+  ⌥ and an arrow move the node: out, in, or up and down among its siblings.
+  While typing an empty node: Enter ends the list (the empty node goes), Tab and ⇧Tab move it in or out.
 - Tables: header row, styles (plain, contrast, striped, none, filled), column widths.
 - Styles: 15 Whimsical palette colors, fill / outline / dash / transparent, Whimsical font size steps, alignment.
 - Shapes can have an icon left of their text (⇧X) and turn in quarter steps (Rotate; the text stays upright). Icons rotate too.
@@ -40,6 +42,10 @@ Editing:
 
 Right-click menu:
 - Cut, Copy, Paste, Paste as (plain text, table), Duplicate, Delete, Select all.
+- Copy puts readable text on the clipboard for other apps (a mind map as an indented list, a table as cells) and keeps the objects for pragmatic.
+  A focused mind map node copies its branch.
+- Paste cells from Sheets, Excel or Notion: a table.
+  Paste an indented or bulleted list: a mind map, or new branches when a mind map node is focused.
 - Copy as PNG, PNG without background, PNG light, PNG dark, SVG, Mermaid.
 - Copy link to object, copy link to board position.
 - Arrange, Align, Group, Wrap in section, Snap to grid, Set as board thumbnail, Add comment, zoom items.
@@ -48,7 +54,7 @@ Board extras:
 - Templates: Flowchart, Retrospective, Kanban board, User journey, Brainstorm, Org chart, and workspace templates (Save as template).
 - Color themes per board, workspace themes, and a workspace default theme.
 - Present mode (sections are slides), timer and voting for workshops.
-- Paste or drop images, `.excalidraw` files and `.mmd` (Mermaid) files.
+- Paste or drop images, `.excalidraw` files, `.mmd` (Mermaid) files, and `.md` or `.txt` outlines (one mind map per top-level line or heading).
 - Double-click an image to crop it.
 
 Shortcuts: see the "Board controls" section of the README.
