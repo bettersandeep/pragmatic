@@ -10,7 +10,7 @@ import { looksLikeOutline, parseForest } from '../../../shared/mindmap.ts';
 import { addCol, addRow, deleteCol, deleteRow, newTable } from '../../../shared/tableOps.ts';
 import {
   DEFAULTS, DEVICES, FRAME_Z, frameScreen, SECTION_Z, STACK_Z, TASK_H, type TaskObj, type StackObj, SHAPE_SIZE, WF_DEFAULTS, cellKey, isBox, isContainer, newId, type BoardObject, type BoxObject, type ConnectorObj, type DrawObj, type End,
-  type MindmapObj, type ShapeKind, type Side, type TableObj,
+  mindmapNodes, type MindmapObj, type ShapeKind, type Side, type TableObj,
 } from '../../../shared/model.ts';
 import { anchor, connectorGeometry, type Pt } from '../../../shared/route.ts';
 import { BoxView, ConnectorView, strokePath } from './ObjectView.tsx';
@@ -483,18 +483,38 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
     if (p) update([p]);
     setSubEdit(false);
     if (!then) return;
-    // On an empty branch, as when typing a list: Enter ends it (the empty node goes), Tab / ⇧Tab move it in or out.
-    const n = o?.[`n.${node}`];
-    if (o && n?.parent && !text.trim()) {
-      if (then === 'Enter' && !neighbour(o, node, 'child')) {
-        const back = neighbour(o, node, 'prev') ?? n.parent;
-        update([deleteNode(o, node)!]);
-        return focusNode(id, back);
-      }
-      if (then === 'Tab' || then === 'ShiftTab') return setTimeout(() => { mindmapAct(id, node, then === 'Tab' ? 'Indent' : 'Outdent'); focusNode(id, node, true); });
+    // On an empty branch, as when typing a list: Tab / ⇧Tab move it in or out and typing goes on; any other key
+    // only ends the typing (the empty node then goes, below).
+    if (!text.trim()) {
+      if (!o?.[`n.${node}`]?.parent || (then !== 'Tab' && then !== 'ShiftTab')) return;
+      keepEmpty.current = node;
+      return setTimeout(() => { mindmapAct(id, node, then === 'Tab' ? 'Indent' : 'Outdent'); focusNode(id, node, true); });
     }
     setTimeout(() => mindmapAct(id, node, then));
   }, [update]);
+
+  // A node left empty when typing on it ends (any key, a click elsewhere) goes, unless branches hang from it. An
+  // empty root takes its map with it, unless the map is all the board has. Focus moves back only if it is still
+  // on that node, so a click elsewhere keeps its own.
+  const editingNode = useRef<{ id: string; node: string } | null>(null);
+  const keepEmpty = useRef<string | null>(null);
+  useEffect(() => {
+    const was = editingNode.current, now = sub?.node && subEdit ? { id: sub.id, node: sub.node } : null;
+    editingNode.current = now;
+    if (!was || (now?.id === was.id && now.node === was.node)) return;
+    if (keepEmpty.current === was.node) { keepEmpty.current = null; return; }
+    const o = mapOf(was.id), n = o?.[`n.${was.node}`], t = o?.[`t.${was.node}`];
+    if (!o || !n || (typeof t === 'string' ? t : n.text).trim() || mindmapNodes(o).some(([, m]) => m.parent === was.node)) return;
+    if (n.parent) {
+      const back = neighbour(o, was.node, 'prev') ?? n.parent;
+      update([deleteNode(o, was.node)!]);
+      setSub((cur) => (cur?.id === was.id && cur.node === was.node ? { id: was.id, node: back } : cur));
+    } else if (latest.current.size > 1) {
+      deleteObjects(doc, [was.id], LOCAL);
+      setSelection((cur) => cur.filter((x) => x !== was.id));
+      setSub((cur) => (cur?.id === was.id ? null : cur));
+    }
+  }, [sub, subEdit]);
 
   // --- table cells -------------------------------------------------------------------
   const tableOf = (id: string) => latest.current.get(id) as TableObj | undefined;

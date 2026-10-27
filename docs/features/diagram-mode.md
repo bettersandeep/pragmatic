@@ -10,7 +10,8 @@ Objects:
   Each node can have an icon (⇧X; multicolor, fill or outline) and a solid or dashed line to its parent.
   Keys: Tab child, Enter sibling, ⌘Enter sibling above, ⌥Enter parent, Shift+Enter line break, ⌘⌃] indent, ⌘⌃[ outdent, ⌘/ collapse, ⇧⌘/ fold or unfold all branches below.
   ⌥ and an arrow move the node: out, in, or up and down among its siblings.
-  While typing an empty node: Enter ends the list (the empty node goes), Tab and ⇧Tab move it in or out.
+  While typing an empty node: Tab and ⇧Tab move it in or out; anything else that ends the typing removes it, unless it has branches.
+  An empty root removes its map, unless the map is all the board has.
 - Tables: header row, styles (plain, contrast, striped, none, filled), column widths.
 - Styles: 15 Whimsical palette colors, fill / outline / dash / transparent, Whimsical font size steps, alignment.
 - Shapes can have an icon left of their text (⇧X) and turn in quarter steps (Rotate; the text stays upright). Icons rotate too.
