@@ -55,6 +55,7 @@ Board extras:
 - Color themes per board, workspace themes, and a workspace default theme.
 - Present mode (sections are slides), timer and voting for workshops.
 - Paste or drop images, `.excalidraw` files, `.mmd` (Mermaid) files, and `.md` or `.txt` outlines (one mind map per top-level line or heading).
+  The Import button next to Export opens the same files.
 - Double-click an image to crop it.
 
 Shortcuts: see the "Board controls" section of the README.

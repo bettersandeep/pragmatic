@@ -36,7 +36,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalSpaceAround, AlignStartHorizontal, AlignStartVertical,
   AlignVerticalSpaceAround, Bookmark, ChevronLeft, ChevronRight, ClipboardPaste, Copy as CopyIcon, CopyPlus, Download, Files, Frame as FrameIcon, Grid3x3,
   History, Image as ImageIcon, Layers, Link2, Lock as LockIcon, MessageSquare, MessageSquarePlus, MousePointerClick, Paintbrush, Play, Scissors,
-  Trash2, Unlock, X as XIcon, ZoomIn, ZoomOut, Maximize, Search, Group, Ungroup,
+  Trash2, Unlock, Upload, X as XIcon, ZoomIn, ZoomOut, Maximize, Search, Group, Ungroup,
 } from 'lucide-react';
 import { HistoryPanel, TimerPill, TimerStart, VotingBanner, VotingStart, castVote, myVotes, totals } from './BoardPanels.tsx';
 import type { TimerState, VotingSession } from '../../../shared/themes.ts';
@@ -1614,6 +1614,7 @@ export function Canvas({ board, boardId, theme, role, onToast }: { board: Board;
       <div className="top-actions" onPointerDown={(e) => e.stopPropagation()}>
         <button className="c-toggle" aria-label="Present" data-tip={slides.length ? `Present ${slides.length} sections` : 'Present the board'} onClick={startPresenting}><Play size={17} /></button>
         <button className={`c-toggle ${panel === 'history' ? 'active' : ''}`} aria-label="Time machine" data-tip="Time machine" onClick={() => { setPanel(panel === 'history' ? null : 'history'); if (panel === 'history') setPreview(null); }}><History size={17} /></button>
+        {canEdit && <button className="c-toggle" aria-label="Import" data-tip="Import a file" onClick={() => importInput.current?.click()}><Upload size={17} /></button>}
         <button className={`c-toggle ${panel === 'export' ? 'active' : ''}`} aria-label="Export" data-tip="Export  ⇧⌘E" onClick={() => setPanel(panel === 'export' ? null : 'export')}><Download size={17} /></button>
         <button className={`c-toggle ${panel === 'comments' ? 'active' : ''}`} aria-label="Comments" data-tip="Comments" onClick={() => setPanel(panel === 'comments' ? null : 'comments')}>
           <MessageSquare size={17} />{threads.filter((t) => !t.resolved).length > 0 && <span>{threads.filter((t) => !t.resolved).length}</span>}
