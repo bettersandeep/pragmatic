@@ -58,7 +58,7 @@ export const MindmapView = memo(function MindmapView({ o, layer, theme, focus, e
           left: n.x, top: n.y, width: n.w, height: n.h, fontSize: px,
           ...(root ? { background: paint!.fill, color: paint!.text }
             : vertical ? { borderColor: ink, color: CANVAS[theme].text }
-            : { borderBottomColor: ink, color: CANVAS[theme].text }),
+            : { color: CANVAS[theme].text }), // the underline is the end of the branch line (mindmapLayout)
         };
         return (
           <div key={n.id} className={`mm-node ${root ? 'root' : ''} ${focus === n.id ? 'focus' : ''} ${n.icon ? 'has-icon' : ''}`} data-node={n.id} data-map={o.id} style={style}>

@@ -88,7 +88,9 @@ export function layoutMindmap(o: MindmapObj, measure: Measure): Layout | null {
   };
   place(tree, 0, 0, 0, tree.node.color ?? 'default');
 
-  // Edges: horizontal maps join underlines (Whimsical style); vertical maps join box edges.
+  // Edges: in a horizontal map each line runs on as the child's underline (Whimsical style), so a branch is one
+  // stroke with no seam; it sits 1px above the box bottom, where the node's 2px border keeps room. Vertical maps
+  // join box edges.
   for (const n of nodes.values()) {
     if (n.depth === 0) continue;
     const parentId = o[`n.${n.id}`]?.parent;
@@ -96,14 +98,14 @@ export function layoutMindmap(o: MindmapObj, measure: Measure): Layout | null {
     if (!p) continue;
     let a: { x: number; y: number }, b: { x: number; y: number };
     if (vertical) { a = { x: p.x + p.w / 2, y: p.y + p.h }; b = { x: n.x + n.w / 2, y: n.y }; }
-    else { a = { x: p.x + p.w, y: p.depth === 0 ? p.y + p.h / 2 : p.y + p.h }; b = { x: n.x, y: n.y + n.h }; }
+    else { a = { x: p.x + p.w, y: p.depth === 0 ? p.y + p.h / 2 : p.y + p.h - 1 }; b = { x: n.x, y: n.y + n.h - 1 }; }
     let d: string;
     if (o.edge === 'angular') d = vertical
       ? `M${a.x},${a.y} V${(a.y + b.y) / 2} H${b.x} V${b.y}`
-      : `M${a.x},${a.y} H${(a.x + b.x) / 2} V${b.y} H${b.x}`;
+      : `M${a.x},${a.y} H${(a.x + b.x) / 2} V${b.y} H${b.x + n.w}`;
     else {
       const k = vertical ? (b.y - a.y) / 2 : (b.x - a.x) / 2;
-      d = vertical ? `M${a.x},${a.y} C${a.x},${a.y + k} ${b.x},${b.y - k} ${b.x},${b.y}` : `M${a.x},${a.y} C${a.x + k},${a.y} ${b.x - k},${b.y} ${b.x},${b.y}`;
+      d = vertical ? `M${a.x},${a.y} C${a.x},${a.y + k} ${b.x},${b.y - k} ${b.x},${b.y}` : `M${a.x},${a.y} C${a.x + k},${a.y} ${b.x - k},${b.y} ${b.x},${b.y} H${b.x + n.w}`;
     }
     edges.push({ from: p.id, to: n.id, d, color: n.color, dash: !!o[`n.${n.id}`]?.dash });
   }
